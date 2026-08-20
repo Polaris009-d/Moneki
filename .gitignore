@@ -1,0 +1,18 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.env
+
+# 生成产物（运行 init_db.py 重新生成）
+data/moneki.db
+data/data_quality.json
+
+# 前端
+frontend/node_modules/
+frontend/dist/
+
+# IDE / 系统
+.idea/
+.DS_Store
