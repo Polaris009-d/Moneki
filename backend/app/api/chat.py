@@ -35,7 +35,15 @@ def chat(req: schemas.ChatRequest, db: Session = Depends(get_db)):
         }
 
     history = _CONTEXTS.get(req.conversation_id, [])
-    result = run_agent(db, req.question, client, history=history)
+    try:
+        result = run_agent(db, req.question, client, history=history)
+    except Exception as e:  # 防御：LLM 接口超时/异常时返回友好提示而非 500
+        result = {
+            "answer": f"抱歉，查询暂时失败（{e}），请稍后重试。",
+            "data": {},
+            "evidence": None,
+            "tool_used": None,
+        }
 
     # 记录上下文（截断防止无限增长）
     history.append({"role": "user", "content": req.question})

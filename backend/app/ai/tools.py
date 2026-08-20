@@ -215,7 +215,14 @@ def execute(db: Session, name: str, args: dict) -> dict:
             "evidence": _ev(name, "", "", 0),
             "text": f"未知工具：{name}",
         }
-    return fn(db, **args)
+    try:
+        return fn(db, **args)
+    except Exception as e:  # 防御：LLM 传意外参数时不至于打崩整个请求
+        return {
+            "data": {},
+            "evidence": _ev(name, "", "", 0),
+            "text": f"工具调用参数有误：{e}",
+        }
 
 
 def _date_param(desc):
