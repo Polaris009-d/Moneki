@@ -2,12 +2,11 @@
   <div class="metric card">
     <div class="label">{{ label }}</div>
     <div class="value">{{ value }}</div>
-    <div class="sub">{{ sub }}</div>
   </div>
 </template>
 
 <script setup lang="ts">
-defineProps<{ label: string; value: string; sub?: string }>()
+defineProps<{ label: string; value: string }>()
 </script>
 
 <style scoped>
@@ -25,9 +24,5 @@ defineProps<{ label: string; value: string; sub?: string }>()
   font-weight: 650;
   letter-spacing: -0.5px;
   color: var(--ink);
-}
-.sub {
-  font-size: 11px;
-  color: var(--ink-muted);
 }
 </style>

@@ -3,7 +3,6 @@
     <header class="header">
       <div>
         <h1>Moneki Analytics</h1>
-        <p class="tagline">门店经营数据看板 · 数字来自真实查询，AI 问答与看板同源</p>
       </div>
       <el-date-picker
         v-model="range"
@@ -16,33 +15,29 @@
     </header>
 
     <section class="kpis">
-      <MetricCard label="净营业额" :value="fmtMoney(summary.revenue)" sub="SUM(amount) · 退款自然扣减" />
-      <MetricCard label="订单数" :value="summary.order_count.toLocaleString()" sub="COUNT(DISTINCT order_id)" />
-      <MetricCard label="客单价" :value="fmtMoney(summary.avg_order_value)" sub="净营业额 / 有效订单数" />
+      <MetricCard label="净营业额" :value="fmtMoney(summary.revenue)" />
+      <MetricCard label="订单数" :value="summary.order_count.toLocaleString()" />
+      <MetricCard label="客单价" :value="fmtMoney(summary.avg_order_value)" />
     </section>
 
     <section class="card">
       <h3>营业额趋势</h3>
-      <div class="sub">每日净营业额（元）</div>
       <SalesTrend :data="daily" />
     </section>
 
     <section class="grid-2">
       <div class="card">
         <h3>Top 10 商品</h3>
-        <div class="sub">按净营业额排序 · JOIN 商品表</div>
         <TopProducts :data="topProducts" />
       </div>
       <div class="card">
         <h3>门店品类营业额</h3>
-        <div class="sub">门店维度（拉面 / 轻食 / 点心 / 三明治 / 日料）</div>
         <StoreCategory :data="storeCategory" />
       </div>
     </section>
 
     <section class="card">
       <h3>AI 经营洞察</h3>
-      <div class="sub">基于真实数据的自动洞察 · 规则计算，无数字幻觉</div>
       <AIInsights :insights="insights" />
     </section>
 
@@ -83,7 +78,7 @@ async function load() {
     fetchDaily(s, e),
     fetchTopProducts(s, e),
     fetchStoreCategory(s, e),
-    fetchInsights(),
+    fetchInsights(s, e),
   ])
   summary.value = sum
   daily.value = d

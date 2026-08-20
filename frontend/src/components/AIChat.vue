@@ -1,7 +1,6 @@
 <template>
   <div class="card chat">
     <h3>AI 数据问答</h3>
-    <div class="sub">用自然语言问经营数据，回答里的每个数字都来自真实数据库查询</div>
 
     <div class="messages">
       <div v-if="messages.length === 0" class="hint">
@@ -21,7 +20,7 @@
               <div class="row"><span>统计口径</span><span>{{ m.evidence.metric }}</span></div>
               <div class="row"><span>时间范围</span><span>{{ m.evidence.period }}</span></div>
               <div class="row"><span>匹配记录</span><span>{{ m.evidence.record_count }} 条</span></div>
-              <div class="row"><span>数据来源</span><span>{{ m.evidence.tool }}</span></div>
+              <div class="row"><span>数据来源</span><span>{{ m.evidence.tool_label }}</span></div>
             </div>
           </template>
           <MiniChart v-if="m.role === 'assistant'" :tool="m.tool_used" :data="m.data" />
