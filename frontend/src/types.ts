@@ -36,6 +36,7 @@ export interface Insight {
 
 export interface Evidence {
   tool: string
+  tool_label: string
   metric: string
   period: string
   record_count: number

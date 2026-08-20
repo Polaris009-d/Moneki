@@ -54,8 +54,25 @@ def _row_count(db: Session, start_date=None, end_date=None, product_name=None):
     return int(q.scalar() or 0)
 
 
+TOOL_LABELS = {
+    "get_summary": "经营汇总",
+    "get_daily_trend": "每日趋势",
+    "get_product_revenue": "商品销售查询",
+    "get_revenue_by_store_category": "门店品类对比",
+    "get_store_revenue_rank": "门店排名",
+    "get_payment_breakdown": "支付方式分布",
+    "get_avg_order_value_trend": "客单价趋势",
+}
+
+
 def _ev(tool, metric, period, record_count):
-    return {"tool": tool, "metric": metric, "period": period, "record_count": record_count}
+    return {
+        "tool": tool,
+        "tool_label": TOOL_LABELS.get(tool, tool),
+        "metric": metric,
+        "period": period,
+        "record_count": record_count,
+    }
 
 
 # ---------------- 工具实现 ----------------
@@ -70,7 +87,7 @@ def tool_summary(db, start_date=None, end_date=None):
     )
     return {
         "data": d,
-        "evidence": _ev("get_summary", "SUM(amount) / COUNT(DISTINCT order_id)", period, d["valid_order_count"]),
+        "evidence": _ev("get_summary", "营业额求和、订单去重计数", period, d["valid_order_count"]),
         "text": text,
     }
 
@@ -82,7 +99,7 @@ def tool_daily_trend(db, start_date=None, end_date=None):
     text = f"每日趋势({period})：\n" + "\n".join(lines)
     return {
         "data": rows,
-        "evidence": _ev("get_daily_trend", "SUM(amount) GROUP BY date", period, len(rows)),
+        "evidence": _ev("get_daily_trend", "按日汇总营业额", period, len(rows)),
         "text": text,
     }
 
@@ -95,7 +112,7 @@ def tool_product_revenue(db, product_name=None, start_date=None, end_date=None):
         suggest = "、".join(names[:6])
         return {
             "data": {"product_name": product_name, "found": False},
-            "evidence": _ev("get_product_revenue", "SUM(amount) WHERE product=?", period, 0),
+            "evidence": _ev("get_product_revenue", "按商品汇总营业额", period, 0),
             "text": f"未找到商品「{product_name}」。数据中的商品包括：{suggest} 等。请据此提示用户并给出最接近的建议，不要编造数字。",
         }
     result = analytics.product_revenue(db, matched, start_date, end_date)
@@ -103,7 +120,7 @@ def tool_product_revenue(db, product_name=None, start_date=None, end_date=None):
     if not result:
         return {
             "data": {"product_name": matched, "found": True, "revenue": 0.0, "qty": 0.0, "order_count": 0},
-            "evidence": _ev("get_product_revenue", "SUM(amount) WHERE product=?", period, 0),
+            "evidence": _ev("get_product_revenue", "按商品汇总营业额", period, 0),
             "text": f"商品「{matched}」在 {period} 无销售记录。",
         }
     rc = _row_count(db, start_date, end_date, product_name=matched)
@@ -116,7 +133,7 @@ def tool_product_revenue(db, product_name=None, start_date=None, end_date=None):
     )
     return {
         "data": result,
-        "evidence": _ev("get_product_revenue", "SUM(amount) WHERE product=?", period, rc),
+        "evidence": _ev("get_product_revenue", "按商品汇总营业额", period, rc),
         "text": text,
     }
 
@@ -129,7 +146,7 @@ def tool_revenue_by_store_category(db, start_date=None, end_date=None):
     rc = _row_count(db, start_date, end_date)
     return {
         "data": rows,
-        "evidence": _ev("get_revenue_by_store_category", "SUM(amount) JOIN stores GROUP BY category", period, rc),
+        "evidence": _ev("get_revenue_by_store_category", "按门店品类汇总营业额", period, rc),
         "text": text,
     }
 
@@ -142,7 +159,7 @@ def tool_store_revenue_rank(db, start_date=None, end_date=None):
     rc = _row_count(db, start_date, end_date)
     return {
         "data": rows,
-        "evidence": _ev("get_store_revenue_rank", "SUM(amount) GROUP BY store", period, rc),
+        "evidence": _ev("get_store_revenue_rank", "按门店汇总营业额", period, rc),
         "text": text,
     }
 
@@ -155,7 +172,7 @@ def tool_payment_breakdown(db, start_date=None, end_date=None):
     rc = _row_count(db, start_date, end_date)
     return {
         "data": rows,
-        "evidence": _ev("get_payment_breakdown", "SUM(amount) GROUP BY payment", period, rc),
+        "evidence": _ev("get_payment_breakdown", "按支付方式汇总营业额", period, rc),
         "text": text,
     }
 
@@ -171,7 +188,7 @@ def tool_avg_order_value_trend(db, window_days=14):
     )
     return {
         "data": d,
-        "evidence": _ev("get_avg_order_value_trend", "avg_order_value (最近N天 vs 前N天)", f"{prev['start']} ~ {cur['end']}", _row_count(db, cur["start"], cur["end"])),
+        "evidence": _ev("get_avg_order_value_trend", "客单价对比", f"{prev['start']} ~ {cur['end']}", _row_count(db, cur["start"], cur["end"])),
         "text": text,
     }
 

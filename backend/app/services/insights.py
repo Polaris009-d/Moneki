@@ -1,10 +1,9 @@
 """经营洞察：从真实数据规则化计算，杜绝任何数字幻觉。
 
-每个洞察的标题/文案/数字都直接来自数据库查询，LLM 不参与数字生成，
-因此看板上的洞察在无 API key 时也能稳定运行、且天然可信。
+所有洞察均按所选日期区间计算；无 LLM 参与数字生成，因此无 key 也能稳定运行且天然可信。
 """
 from collections import defaultdict
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -13,33 +12,69 @@ from ..models import Sale, Store
 from . import analytics
 
 
-def get_insights(db: Session) -> list[dict]:
+def get_insights(db: Session, start_date: str | None = None, end_date: str | None = None) -> list[dict]:
     out = []
-    out.append(_mom_growth(db))
-    out.append(_weekend_effect(db))
-    out.append(_membership(db))
-    out.append(_top_product(db))
-    out.extend(_anomalies(db))
+    out.append(_period_comparison(db, start_date, end_date))
+    out.append(_weekend_effect(db, start_date, end_date))
+    out.append(_membership(db, start_date, end_date))
+    out.append(_top_product(db, start_date, end_date))
+    out.extend(_anomalies(db, start_date, end_date))
     return out
 
 
-def _mom_growth(db: Session) -> dict:
-    may = analytics.summary(db, "2026-05-01", "2026-05-31")["revenue"]
-    jun = analytics.summary(db, "2026-06-01", "2026-06-30")["revenue"]
-    jul = analytics.summary(db, "2026-07-01", "2026-07-31")["revenue"]
-    pct_jul = (jul - jun) / jun * 100 if jun else 0.0
-    direction = "增长" if pct_jul >= 0 else "下降"
+def _period_comparison(db: Session, start_date, end_date) -> dict:
+    """环比：所选区间 vs 上一等长区间；上一区间无数据时回退为最近完整月 vs 上月。"""
+    if start_date and end_date:
+        cur = analytics.summary(db, start_date, end_date)["revenue"]
+        d1 = datetime.strptime(start_date, "%Y-%m-%d")
+        d2 = datetime.strptime(end_date, "%Y-%m-%d")
+        length = (d2 - d1).days + 1
+        prev_e = d1 - timedelta(days=1)
+        prev_s = prev_e - timedelta(days=length - 1)
+        prev = analytics.summary(db, prev_s.strftime("%Y-%m-%d"), prev_e.strftime("%Y-%m-%d"))["revenue"]
+        if prev > 0:
+            return _build_comparison(cur, prev)
+    return _last_month_mom(db)
+
+
+def _last_month_mom(db: Session) -> dict:
+    """数据最近完整月 vs 上月（用于无上一周期数据时的回退）。"""
+    max_date = db.execute(select(func.max(Sale.date))).scalar()
+    d = datetime.strptime(max_date, "%Y-%m-%d")
+    cur_s = d.replace(day=1).strftime("%Y-%m-%d")
+    cur_e = d.strftime("%Y-%m-%d")
+    prev_e = (d.replace(day=1) - timedelta(days=1)).strftime("%Y-%m-%d")
+    prev_s = prev_e[:8] + "01"
+    cur = analytics.summary(db, cur_s, cur_e)["revenue"]
+    prev = analytics.summary(db, prev_s, prev_e)["revenue"]
+    return _build_comparison(cur, prev)
+
+
+def _build_comparison(cur: float, prev: float) -> dict:
+    if prev > 0:
+        pct = (cur - prev) / prev * 100
+        direction = "增长" if pct >= 0 else "下降"
+        text = f"本期净营业额 ¥{cur:,.0f}，较上一周期{direction} {abs(pct):.1f}%（上期 ¥{prev:,.0f}）。"
+        severity = "positive" if pct >= 0 else "negative"
+    else:
+        text = f"本期净营业额 ¥{cur:,.0f}（上一周期无销售数据）。"
+        severity = "info"
+        pct = None
     return {
-        "type": "mom_growth",
+        "type": "period_comparison",
         "title": "环比趋势",
-        "severity": "positive" if pct_jul >= 0 else "negative",
-        "text": f"7 月净营业额 ¥{jul:,.0f}，环比 6 月{direction} {abs(pct_jul):.1f}%（6 月 ¥{jun:,.0f}，5 月 ¥{may:,.0f}）。",
-        "data": {"may": round(may, 2), "jun": round(jun, 2), "jul": round(jul, 2), "jul_change_pct": round(pct_jul, 2)},
+        "severity": severity,
+        "text": text,
+        "data": {
+            "current_revenue": round(cur, 2),
+            "previous_revenue": round(prev, 2),
+            "change_pct": round(pct, 2) if pct is not None else None,
+        },
     }
 
 
-def _weekend_effect(db: Session) -> dict:
-    daily = analytics.daily_trend(db)
+def _weekend_effect(db: Session, start_date, end_date) -> dict:
+    daily = analytics.daily_trend(db, start_date, end_date)
     wd_sum = wd_n = we_sum = we_n = 0
     for d in daily:
         dt = datetime.strptime(d["date"], "%Y-%m-%d")
@@ -61,8 +96,8 @@ def _weekend_effect(db: Session) -> dict:
     }
 
 
-def _membership(db: Session) -> dict:
-    rows = analytics.payment_breakdown(db)
+def _membership(db: Session, start_date, end_date) -> dict:
+    rows = analytics.payment_breakdown(db, start_date, end_date)
     total = sum(r["revenue"] for r in rows)
     member = next((r["revenue"] for r in rows if r["payment"] == "会员储值"), 0.0)
     ratio = member / total * 100 if total else 0.0
@@ -75,8 +110,11 @@ def _membership(db: Session) -> dict:
     }
 
 
-def _top_product(db: Session) -> dict:
-    top = analytics.top_products(db, limit=1)[0]
+def _top_product(db: Session, start_date, end_date) -> dict:
+    top = analytics.top_products(db, start_date, end_date, limit=1)
+    if not top:
+        return {"type": "top_product", "title": "热销商品", "severity": "info", "text": "该区间无销售数据。", "data": {}}
+    top = top[0]
     return {
         "type": "top_product",
         "title": "热销商品",
@@ -86,13 +124,18 @@ def _top_product(db: Session) -> dict:
     }
 
 
-def _anomalies(db: Session, threshold: float = 2.0, limit: int = 3) -> list[dict]:
+def _anomalies(db: Session, start_date, end_date, threshold: float = 2.0, limit: int = 3) -> list[dict]:
     """异常销售预警：每门店每日营业额偏离自身均值超过 threshold 个标准差。"""
-    rows = db.execute(
+    q = (
         select(Sale.store_id, Sale.date, func.sum(Sale.amount))
         .join(Store, Sale.store_id == Store.store_id)
         .group_by(Sale.store_id, Sale.date)
-    ).all()
+    )
+    if start_date:
+        q = q.where(Sale.date >= start_date)
+    if end_date:
+        q = q.where(Sale.date <= end_date)
+    rows = db.execute(q).all()
     store_names = dict(db.execute(select(Store.store_id, Store.store_name)).all())
 
     daily = defaultdict(list)
@@ -123,7 +166,7 @@ def _anomalies(db: Session, threshold: float = 2.0, limit: int = 3) -> list[dict
     anomalies.sort(key=lambda a: -abs(a["z_score"]))
     top = anomalies[:limit]
     if not top:
-        return [{"type": "anomaly", "title": "异常销售预警", "severity": "info", "text": "近期各门店日营业额无显著异常。", "data": []}]
+        return [{"type": "anomaly", "title": "异常销售预警", "severity": "info", "text": "所选区间内各门店日营业额无显著异常。", "data": []}]
 
     texts = [
         f"{a['store_name']} 在 {a['date']} 营业额{a['direction']}（¥{a['revenue']:,.0f}，偏离均值 {abs(a['z_score']):.1f} 个标准差）"

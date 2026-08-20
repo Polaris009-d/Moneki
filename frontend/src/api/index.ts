@@ -19,8 +19,8 @@ export async function fetchStoreCategory(start?: string, end?: string): Promise<
   return (await http.get('/dashboard/store-category', { params: { start_date: start, end_date: end } })).data
 }
 
-export async function fetchInsights(): Promise<Insight[]> {
-  return (await http.get('/insights')).data.insights
+export async function fetchInsights(start?: string, end?: string): Promise<Insight[]> {
+  return (await http.get('/insights', { params: { start_date: start, end_date: end } })).data.insights
 }
 
 export async function postChat(question: string, conversationId?: string): Promise<ChatResponse> {

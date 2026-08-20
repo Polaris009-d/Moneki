@@ -51,6 +51,7 @@ class ChatRequest(BaseModel):
 
 class Evidence(BaseModel):
     tool: str
+    tool_label: str
     metric: str
     period: str
     record_count: int
