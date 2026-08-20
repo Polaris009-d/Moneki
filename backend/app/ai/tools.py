@@ -188,7 +188,7 @@ def tool_avg_order_value_trend(db, window_days=14):
     )
     return {
         "data": d,
-        "evidence": _ev("get_avg_order_value_trend", "客单价对比", f"{prev['start']} ~ {cur['end']}", _row_count(db, cur["start"], cur["end"])),
+        "evidence": _ev("get_avg_order_value_trend", "客单价对比", f"{prev['start']} ~ {cur['end']}", _row_count(db, prev["start"], cur["end"])),
         "text": text,
     }
 
